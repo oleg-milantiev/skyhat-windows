@@ -21,6 +21,9 @@ namespace SkyHat
         private Serial serial = new Serial();
         private RegistryKey registry;
 
+        private System.Threading.Timer timerSerial;
+
+        #region Form Build
         public Form1()
         {
             InitializeComponent();
@@ -37,9 +40,9 @@ namespace SkyHat
 
             if (move != "")
             {
-                moveLeft.Checked = (move == "l");
-                moveRight.Checked = (move == "r");
-                moveBoth.Checked = (move == "a");
+                partLeft.Checked = (move == "l");
+                partRight.Checked = (move == "r");
+                partBoth.Checked = (move == "a");
             }
 
             if (registry.GetValue("comPort", "").ToString() != "")
@@ -47,9 +50,14 @@ namespace SkyHat
                 comPort.SelectedItem = registry.GetValue("comPort", "").ToString();
             }
 
-            moveLeft.Text = firstLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
-            moveRight.Text = firstRight.Text = registry.GetValue("nameRight", "Right").ToString();
+            partLeft.Text = firstLeft.Text = reverseLeft.Text = labelLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
+            partRight.Text = firstRight.Text = reverseRight.Text = labelRight.Text = registry.GetValue("nameRight", "Right").ToString();
+
+            lightPresetRefresh();
+
+            timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100);
         }
+        #endregion
 
         private void comPort_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -67,16 +75,23 @@ namespace SkyHat
         private void SerialCommand_Get()
         {
             if (!serialSend(new byte[] { (byte)'c', (byte)'g' }))
+            {
                 return;
+            }
 
-            byte[] serialBuf = new byte[8];
+            byte[] serialBuf = new byte[10];
 
             try
             {
-                serialBuf = serial.ReceiveCountedBinary(8);
-                
-                light.BackColor = System.Drawing.Color.FromArgb(serialBuf[7], serialBuf[7], serialBuf[7]);
-                statusLight.Text = (serialBuf[7] > 0) ? "On" : "Off";
+                serialBuf = serial.ReceiveCountedBinary(10);
+
+                Invoke((MethodInvoker)(() =>
+                    light.BackColor = System.Drawing.Color.FromArgb(serialBuf[7], serialBuf[7], serialBuf[7])
+                ));
+
+                Invoke((MethodInvoker)(() =>
+                    statusLight.Text = serialBuf[7].ToString()
+                ));
 
                 //0 byte start = 0xEE
                 //1 byte, current: Текущий ток в ADU датчика
@@ -90,101 +105,153 @@ namespace SkyHat
                 //9 byte, speedRight: скорость левой крышки
                 //- byte stop = 0x00
 
+                /* debug
+                Invoke((MethodInvoker)(() =>
+                    status.Text = serialBuf[1].ToString() + "," +
+                        serialBuf[2].ToString() + "," +
+                        serialBuf[3].ToString() + "," +
+                        serialBuf[4].ToString() + "," +
+                        serialBuf[5].ToString() + "," +
+                        serialBuf[6].ToString() + "," +
+                        serialBuf[7].ToString() + "," +
+                        serialBuf[8].ToString() + "," +
+                        serialBuf[9].ToString()
+                ));
+                */
+
                 switch ((char)serialBuf[3])
                 {
                     case 'c':
-                        statusHatLeft.Text = "Closing";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatLeft.Text = "Closing"
+                        ));
                         break;
 
                     case 'g':
-                        statusHatLeft.Text = "Waiting";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatLeft.Text = "Waiting"
+                        ));
                         break;
 
                     case 'o':
-                        statusHatLeft.Text = "Opening";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatLeft.Text = "Opening"
+                        ));
                         break;
 
                     default:
                         switch ((char)serialBuf[5])
                         {
                             case 'c':
-                                statusHatLeft.Text = "Close";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatLeft.Text = "Close"
+                                ));
+
                                 if (status.BackColor == System.Drawing.Color.LightYellow)
                                 {
-                                    status.Text = "";
-                                    status.BackColor = System.Drawing.Color.LightGreen;
+                                    Invoke((MethodInvoker)(() =>
+                                        status.Text = ""
+                                    ));
+                                    Invoke((MethodInvoker)(() =>
+                                        status.BackColor = System.Drawing.Color.LightGreen
+                                    ));
                                 }
-                                
+
                                 break;
 
                             case 'o':
-                                statusHatLeft.Text = "Open";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatLeft.Text = "Open"
+                                ));
+
                                 if (status.BackColor == System.Drawing.Color.LightYellow)
                                 {
-                                    status.Text = "";
-                                    status.BackColor = System.Drawing.Color.LightGreen;
+                                    Invoke((MethodInvoker)(() =>
+                                        status.Text = ""
+                                    ));
+                                    Invoke((MethodInvoker)(() =>
+                                        status.BackColor = System.Drawing.Color.LightGreen
+                                    ));
                                 }
                                 break;
 
                             default:
-                                statusHatLeft.Text = "Unknown";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatLeft.Text = "Unknown"
+                                ));
                                 break;
                         }
                         break;
                 }
 
-
                 switch ((char)serialBuf[4])
                 {
                     case 'c':
-                        statusHatRight.Text = "Closing";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatRight.Text = "Closing"
+                        ));
                         break;
 
                     case 'g':
-                        statusHatRight.Text = "Waiting";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatRight.Text = "Waiting"
+                        ));
                         break;
 
                     case 'o':
-                        statusHatRight.Text = "Opening";
+                        Invoke((MethodInvoker)(() =>
+                            statusHatRight.Text = "Opening"
+                        ));
                         break;
 
                     default:
                         switch ((char)serialBuf[6])
                         {
                             case 'c':
-                                statusHatRight.Text = "Close";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatRight.Text = "Close"
+                                ));
                                 if (status.BackColor == System.Drawing.Color.LightYellow)
                                 {
-                                    status.Text = "";
-                                    status.BackColor = System.Drawing.Color.LightGreen;
+                                    Invoke((MethodInvoker)(() =>
+                                        status.Text = ""
+                                    ));
+                                    Invoke((MethodInvoker)(() =>
+                                        status.BackColor = System.Drawing.Color.LightGreen
+                                    ));
                                 }
 
                                 break;
 
                             case 'o':
-                                statusHatRight.Text = "Open";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatRight.Text = "Open"
+                                ));
                                 if (status.BackColor == System.Drawing.Color.LightYellow)
                                 {
-                                    status.Text = "";
-                                    status.BackColor = System.Drawing.Color.LightGreen;
+                                    Invoke((MethodInvoker)(() =>
+                                        status.Text = ""
+                                    ));
+                                    Invoke((MethodInvoker)(() =>
+                                        status.BackColor = System.Drawing.Color.LightGreen
+                                    ));
                                 }
                                 break;
 
                             default:
-                                statusHatRight.Text = "Unknown";
+                                Invoke((MethodInvoker)(() =>
+                                    statusHatRight.Text = "Unknown"
+                                ));
                                 break;
                         }
                         break;
                 }
-
             }
             catch (Exception Ex)
             {
                 SerialDisconnect();
             }
-            
         }
-
 
         private bool SerialConnect()
         {
@@ -217,56 +284,99 @@ namespace SkyHat
 
                 Thread.Sleep(2000);
 
-                SerialCommand_Get();
+                //SerialCommand_Get();
 
                 if (!serialSend(new byte[] { (byte)'c', (byte)'e' }))
                     return false;
                 
-                byte[] serialBuf = new byte[7];
+                byte[] serialBuf = new byte[13];
 
-                serialBuf = serial.ReceiveCountedBinary(8);
+                serialBuf = serial.ReceiveCountedBinary(14);
 
                 //- byte start = 0xEE
-                //1 byte, first: какая крышка едет первой при открытии (при закрытии наоборот). Параметр: 'l' (левая, по-умолчанию) или 'r' (правая).
-                //2 byte, timeout: задание таймаута движения крышки в секундах. Параметр: число секунд (3, например)
-                //3 byte, brightness: яркость EL Panel
-                //4 byte, threshold: задание порога срабатывания датчика тока. Параметр: число порога (25, например)
-                //5 byte, maxSpeed: задание максимальной скорости мотора в ШИМ 0..255. Параметр: число скорости (255, например)
-                //6 byte, velocity: ускорение (скорость разгона). Параметр: число ускорения (5, например)
+                //1 byte, part: какой мотор используется. Параметр: 'l' (левый), 'r' (правый), 'b' (оба по очереди).
+                //2 byte, first: какая крышка едет первой при открытии (при закрытии наоборот). Параметр: 'l' (левая, по-умолчанию) или 'r' (правая).
+                //3 byte, timeoutLeft: задание таймаута движения левой крышки в секундах. Параметр: число секунд (3, например)
+                //4 byte, timeoutRight: задание таймаута движения правой крышки в секундах. Параметр: число секунд (3, например)
+                //5 byte, thresholdLeft: задание порога срабатывания датчика тока при движении левого мотора. Параметр: число порога (25, например)
+                //6 byte, thresholdRight: задание порога срабатывания датчика тока при движении правого мотора. Параметр: число порога (25, например)
+                //7 byte, maxSpeedLeft: задание максимальной скорости левого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
+                //8 byte, maxSpeedRight: задание максимальной скорости правого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
+                //9 byte, velocityLeft: ускорение (скорость разгона) левого мотора. Параметр: число ускорения (5, например)
+                //10 byte, velocityRight: ускорение (скорость разгона) правого мотора. Параметр: число ускорения (5, например)
+                //11 byte, reverseLeft: реверс левого мотора (1 / 0)
+                //12 byte, reverseRight: реверс правого мотора (1 / 0)
                 //- byte stop = 0x00
 
-                firstLeft.Checked = (char)serialBuf[1] == 'l';
-                firstRight.Checked = (char)serialBuf[1] == 'r';
-                timeout.Value    = serialBuf[2] > 254 ? 254 : serialBuf[2];
-                brightness.Value = serialBuf[3] > 254 ? 254 : serialBuf[3];
-                threshold.Value  = serialBuf[4] > 254 ? 254 : serialBuf[4];
-                maxSpeed.Value   = serialBuf[5] > 254 ? 254 : serialBuf[5];
-                velocity.Value   = serialBuf[6] > 254 ? 254 : serialBuf[6];
+                partLeft.Checked  = (char)serialBuf[1] == 'l';
+                partRight.Checked = (char)serialBuf[1] == 'r';
+                partBoth.Checked  = (char)serialBuf[1] == 'b';
 
+                firstLeft.Checked  = (char)serialBuf[2] == 'l';
+                firstRight.Checked = (char)serialBuf[2] == 'r';
+
+                timeoutLeft.Value = serialBuf[3] > 254 ? 254 : serialBuf[3];
+                timeoutRight.Value = serialBuf[4] > 254 ? 254 : serialBuf[4];
+
+                thresholdLeft.Value = serialBuf[5] > 254 ? 254 : serialBuf[5];
+                thresholdRight.Value = serialBuf[6] > 254 ? 254 : serialBuf[6];
+
+                maxSpeedLeft.Value   = serialBuf[7] > 254 ? 254 :
+                    (serialBuf[7] < 10 ? 10 : serialBuf[7]);
+                maxSpeedRight.Value  = serialBuf[8] > 254 ? 254 :
+                    (serialBuf[8] < 10 ? 10 : serialBuf[8]);
+
+                velocityLeft.Value = serialBuf[9] > 254 ? 254 :
+                    (serialBuf[9] < 1 ? 1 : serialBuf[9]);
+                velocityRight.Value = serialBuf[10] > 254 ? 254 :
+                    (serialBuf[10] < 1 ? 1 : serialBuf[10]);
+
+                reverseLeft.Checked = serialBuf[11] == 1;
+                reverseRight.Checked = serialBuf[12] == 1;
+
+                lightPreset1.Enabled = true;
+                lightPreset2.Enabled = true;
+                lightPreset3.Enabled = true;
+                lightPreset4.Enabled = true;
+                lightPreset5.Enabled = true;
+                saveLightPreset1.Enabled = true;
+                saveLightPreset2.Enabled = true;
+                saveLightPreset3.Enabled = true;
+                saveLightPreset4.Enabled = true;
+                saveLightPreset5.Enabled = true;
+
+                partLeft.Enabled  = true;
+                partRight.Enabled = true;
+                partBoth.Enabled = true;
+                
                 firstLeft.Enabled  = true;
                 firstRight.Enabled = true;
 
-                moveLeft.Enabled  = true;
-                moveRight.Enabled = true;
-                moveBoth.Enabled  = true;
+                timeoutLeft.Enabled    = true;
+                timeoutRight.Enabled    = true;
+                thresholdLeft.Enabled  = true;
+                thresholdRight.Enabled  = true;
+                maxSpeedLeft.Enabled   = true;
+                maxSpeedRight.Enabled   = true;
+                velocityLeft.Enabled   = true;
+                velocityRight.Enabled   = true;
+                reverseLeft.Enabled   = true;
+                reverseRight.Enabled   = true;
 
-                timeout.Enabled    = true;
-                brightness.Enabled = true;
-                threshold.Enabled  = true;
-                maxSpeed.Enabled   = true;
-                velocity.Enabled   = true;
-
-                lightOn.Enabled = true;
-                lightOff.Enabled = true;
-
-                moveOpen.Enabled = true;
-                moveClose.Enabled = true;
+                moveOpenDefault.Enabled = true;
+                moveCloseDefault.Enabled = true;
+                moveOpenLeft.Enabled = true;
+                moveCloseLeft.Enabled = true;
+                moveOpenRight.Enabled = true;
+                moveCloseRight.Enabled = true;
+                moveOpenBoth.Enabled = true;
+                moveCloseBoth.Enabled = true;
                 moveAbort.Enabled = true;
+                moveAbortDefault.Enabled = true;
 
                 status.Text = "Connected";
                 status.BackColor = System.Drawing.Color.LightGreen;
-                timer1.Enabled = true;
-
+                
                 settingsSave.Enabled = false;
 
                 return true;
@@ -284,7 +394,11 @@ namespace SkyHat
             {
                 MessageBox.Show("Unknown error opening COM port: " + Ex.Message, "Connection error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
-                serial.Connected = false;
+                if (serial.Connected)
+                {
+                    SerialDisconnect();
+                }
+
                 serial.DTREnable = false;
                 serial.RTSEnable = false;
 
@@ -296,7 +410,6 @@ namespace SkyHat
             return false;
         }
 
-        
         private bool serialSend(byte[] package)
         {
             if (!serial.Connected)
@@ -308,8 +421,12 @@ namespace SkyHat
             }
             catch (Exception Ex)
             {
-                serial.Connected = false;
-                MessageBox.Show("Error sending command via COM port", "Sendgin command error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (serial.Connected)
+                {
+                    SerialDisconnect();
+                }
+
+                MessageBox.Show("Error sending command via COM port", "Sending command error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 return false;
             }
@@ -324,21 +441,27 @@ namespace SkyHat
             {
                 if (serial.Connected)
                 {
-                    serial.Connected = false;
+                    SerialDisconnect();
                 }
 
-                MessageBox.Show("Error sending command via COM port", "Sendgin command error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Error sending command via COM port", "Sending command error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 return false;
             }
         }
         
-        
         private void SerialDisconnect()
         {
             if (serial.Connected)
             {
-                serial.Connected = false;
+                try
+                {
+                    serial.Connected = false;
+                }
+                catch (Exception Ex2)
+                {
+
+                }
             }
 
             serial.DTREnable = false;
@@ -348,26 +471,48 @@ namespace SkyHat
             status.BackColor = System.Drawing.Color.LightPink;
             status.Text = "Disconnected";
 
-            moveLeft.Enabled = false;
-            moveRight.Enabled = false;
-            moveBoth.Enabled = false;
+            lightPreset1.Enabled = false;
+            lightPreset2.Enabled = false;
+            lightPreset3.Enabled = false;
+            lightPreset4.Enabled = false;
+            lightPreset5.Enabled = false;
+            saveLightPreset1.Enabled = false;
+            saveLightPreset2.Enabled = false;
+            saveLightPreset3.Enabled = false;
+            saveLightPreset4.Enabled = false;
+            saveLightPreset5.Enabled = false;
 
-            timeout.Enabled = false;
-            brightness.Enabled = false;
-            threshold.Enabled = false;
-            maxSpeed.Enabled = false;
-            velocity.Enabled = false;
+            partLeft.Enabled = false;
+            partRight.Enabled = false;
+            partBoth.Enabled = false;
+
+            firstLeft.Enabled = false;
+            firstRight.Enabled = false;
+
+            timeoutLeft.Enabled = false;
+            timeoutRight.Enabled = false;
+            thresholdLeft.Enabled = false;
+            thresholdRight.Enabled = false;
+            maxSpeedLeft.Enabled = false;
+            maxSpeedRight.Enabled = false;
+            velocityLeft.Enabled = false;
+            velocityRight.Enabled = false;
+            reverseLeft.Enabled = false;
+            reverseRight.Enabled = false;
 
             settingsSave.Enabled = false;
 
-            lightOn.Enabled = false;
-            lightOff.Enabled = false;
+            moveOpenDefault.Enabled = false;
+            moveCloseDefault.Enabled = false;
 
-            moveOpen.Enabled = false;
-            moveClose.Enabled = false;
+            moveOpenLeft.Enabled = false;
+            moveCloseLeft.Enabled = false;
+            moveOpenRight.Enabled = false;
+            moveCloseRight.Enabled = false;
+            moveOpenBoth.Enabled = false;
+            moveCloseBoth.Enabled = false;
             moveAbort.Enabled = false;
-
-            timer1.Enabled = false;
+            moveAbortDefault.Enabled = false;
         }
         #endregion
 
@@ -376,34 +521,29 @@ namespace SkyHat
             saveSettings();
         }
 
-
         private void saveSettings()
         {
-            if (serialSend(new byte[] { (byte)'c', (byte)'s', 
+            timerSend = new byte[] { (byte)'c', (byte)'s',
+                (byte)(partLeft.Checked ? 'l' : (partRight.Checked ? 'r' : 'b')),
                 (byte)(firstLeft.Checked ? 'l' : 'r'),
-                (byte)timeout.Value,
-                (byte)brightness.Value,
-                (byte)threshold.Value,
-                (byte)maxSpeed.Value,
-                (byte)velocity.Value,
-            }))
-            {
-                status.Text = "Settings saved successfully";
-            }
+                (byte)timeoutLeft.Value,
+                (byte)timeoutRight.Value,
+                (byte)thresholdLeft.Value,
+                (byte)thresholdRight.Value,
+                (byte)maxSpeedLeft.Value,
+                (byte)maxSpeedRight.Value,
+                (byte)velocityLeft.Value,
+                (byte)velocityRight.Value,
+                (byte)(reverseLeft.Checked ? 1 : 0),
+                (byte)(reverseRight.Checked ? 1 : 0),
+            };
 
-            registry.SetValue("move",
-                moveLeft.Checked
-                    ? "l"
-                    : (moveRight.Checked
-                        ? "r"
-                        : "a"
-                        )
-            );
+            timerText = "Settings saved successfully";
+            timerColor = System.Drawing.Color.LightGreen;
 
             settingsSave.Enabled = false;
         }
 
-        
         private bool confirmSave()
         {
             if (settingsSave.Enabled)
@@ -417,7 +557,7 @@ namespace SkyHat
                         break;
 
                     case DialogResult.No:
-                        SerialCommand_Get();
+                        //SerialCommand_Get();
                         break;
 
                     case DialogResult.Cancel:
@@ -428,101 +568,32 @@ namespace SkyHat
             return true;
         }
 
-        private void lightOn_Click(object sender, EventArgs e)
+        private void moveOpen(byte ch)
         {
             if (!confirmSave())
             {
                 return;
             }
+
+            timerSend = new byte[] { (byte)'c', (byte)'o', ch };
+            timerText = "Start opening";
+            timerColor = System.Drawing.Color.LightYellow;
             
-            if (serialSend(new byte[] { (byte)'c', (byte)'l', (byte)'1'}))
-            {
-                status.Text = "Light is switched on";
-
-                SerialCommand_Get();
-            }
+            brightness.Value = 0;
         }
 
-        private void lightOff_Click(object sender, EventArgs e)
-        {
-            if (!confirmSave())
-            {
-                return;
-            }
-            
-            if (serialSend(new byte[] { (byte)'c', (byte)'l', (byte)'0' }))
-            {
-                status.Text = "Light is switched off";
-
-                SerialCommand_Get();
-            }
-        }
-
-        private void gap_ValueChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void timeout_ValueChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void threshold_ValueChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void maxSpeed_ValueChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void velocity_ValueChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void firstLeft_CheckedChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void firstRight_CheckedChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void moveOpen_Click(object sender, EventArgs e)
+        private void moveClose(byte ch)
         {
             if (!confirmSave())
             {
                 return;
             }
 
-            if (serialSend(new byte[] { (byte)'c', (byte)'o', (byte)(moveLeft.Checked ? 'l' : (moveRight.Checked ? 'r' : 'a')) }))
-            {
-                status.Text = "Start opening";
-                status.BackColor = System.Drawing.Color.LightYellow;
+            timerSend = new byte[] { (byte)'c', (byte)'c', ch };
+            timerText = "Start closing";
+            timerColor = System.Drawing.Color.LightYellow;
 
-                SerialCommand_Get();
-            }
-        }
-
-        private void moveClose_Click(object sender, EventArgs e)
-        {
-            if (!confirmSave())
-            {
-                return;
-            }
-            
-            if (serialSend(new byte[] { (byte)'c', (byte)'c', (byte)(moveLeft.Checked ? 'l' : (moveRight.Checked ? 'r' : 'a')) }))
-            {
-                status.Text = "Start closing";
-                status.BackColor = System.Drawing.Color.LightYellow;
-
-                SerialCommand_Get();
-            }
+            brightness.Value = 0;
         }
 
         private void moveAbort_Click(object sender, EventArgs e)
@@ -531,43 +602,14 @@ namespace SkyHat
             {
                 return;
             }
-            
-            if (serialSend(new byte[] { (byte)'c', (byte)'a' }))
-            {
-                SerialCommand_Get();
 
-                status.Text = "Abort movement";
-            }
+            timerText = "Abort movement";
+            timerSend = new byte[] { (byte)'c', (byte)'a' };
+
+            brightness.Value = 0;
         }
 
-        private void timer1_Tick(object sender, EventArgs e)
-        {
-            if (!serial.Connected)
-            {
-                status.Text = "Not connected";
-                status.BackColor = System.Drawing.Color.LightPink;
-                return;
-            }
-
-            SerialCommand_Get();
-        }
-
-        private void moveLeft_CheckedChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void moveRight_CheckedChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void moveBoth_CheckedChanged(object sender, EventArgs e)
-        {
-            settingsSave.Enabled = true;
-        }
-
-        private void brightness_Scroll(object sender, EventArgs e)
+        private void settingChanged(object sender, EventArgs e)
         {
             settingsSave.Enabled = true;
         }
@@ -617,9 +659,182 @@ namespace SkyHat
             Config config = new Config();
             config.ShowDialog();
 
-            moveLeft.Text = firstLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
-            moveRight.Text = firstRight.Text = registry.GetValue("nameRight", "Right").ToString();
+            partLeft.Text = firstLeft.Text = reverseLeft.Text = labelLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
+            partRight.Text = firstRight.Text = reverseRight.Text = labelRight.Text = registry.GetValue("nameRight", "Right").ToString();
         }
 
+        #region Light
+        private void brightness_Scroll(object sender, EventArgs e)
+        {
+            lightSet();
+        }
+
+        private void lightSet()
+        {
+            timerSend = new byte[] { (byte)'c', (byte)'l', (byte)brightness.Value };
+            timerText = "Light is tuned to " + brightness.Value.ToString();
+        }
+
+        private void saveLightPreset(int no)
+        {
+            registry.SetValue("lightPreset" + no.ToString(), brightness.Value);
+            lightPresetRefresh();
+        }
+
+        private void lightPresetRefresh()
+        {
+            lightPreset1.Text = registry.GetValue("lightPreset1", "[empty]").ToString();
+            lightPreset1.Enabled = lightPreset1.Text != "[empty]";
+            lightPreset2.Text = registry.GetValue("lightPreset2", "[empty]").ToString();
+            lightPreset2.Enabled = lightPreset2.Text != "[empty]";
+            lightPreset3.Text = registry.GetValue("lightPreset3", "[empty]").ToString();
+            lightPreset3.Enabled = lightPreset3.Text != "[empty]";
+            lightPreset4.Text = registry.GetValue("lightPreset4", "[empty]").ToString();
+            lightPreset4.Enabled = lightPreset4.Text != "[empty]";
+            lightPreset5.Text = registry.GetValue("lightPreset5", "[empty]").ToString();
+            lightPreset5.Enabled = lightPreset5.Text != "[empty]";
+        }
+
+        private void lightPreset(int no)
+        {
+            brightness.Value = (int)registry.GetValue("lightPreset"+ no.ToString(), 0);
+            lightSet();
+        }
+        #endregion
+
+        #region Serial Buttons
+        private void moveOpen_Click(object sender, EventArgs e)
+        {
+            moveOpen((byte)'a');
+        }
+
+        private void moveClose_Click(object sender, EventArgs e)
+        {
+            moveClose((byte)'a');
+        }
+
+        private void saveLightPreset1_Click(object sender, EventArgs e)
+        {
+            saveLightPreset(1);
+        }
+
+        private void saveLightPreset2_Click(object sender, EventArgs e)
+        {
+            saveLightPreset(2);
+        }
+
+        private void saveLightPreset3_Click(object sender, EventArgs e)
+        {
+            saveLightPreset(3);
+        }
+
+        private void saveLightPreset4_Click(object sender, EventArgs e)
+        {
+            saveLightPreset(4);
+        }
+
+        private void saveLightPreset5_Click(object sender, EventArgs e)
+        {
+            saveLightPreset(5);
+        }
+
+        private void lightPreset1_Click(object sender, EventArgs e)
+        {
+            lightPreset(1);
+        }
+
+        private void lightPreset2_Click(object sender, EventArgs e)
+        {
+            lightPreset(2);
+        }
+
+        private void lightPreset3_Click(object sender, EventArgs e)
+        {
+            lightPreset(3);
+        }
+
+        private void lightPreset4_Click(object sender, EventArgs e)
+        {
+            lightPreset(4);
+        }
+
+        private void lightPreset5_Click(object sender, EventArgs e)
+        {
+            lightPreset(5);
+        }
+
+        private void moveOpenLeft_Click(object sender, EventArgs e)
+        {
+            moveOpen((byte)'l');
+        }
+
+        private void moveCloseLeft_Click(object sender, EventArgs e)
+        {
+            moveClose((byte)'l');
+        }
+
+        private void moveOpenRight_Click(object sender, EventArgs e)
+        {
+            moveOpen((byte)'r');
+        }
+
+        private void moveCloseRight_Click(object sender, EventArgs e)
+        {
+            moveClose((byte)'r');
+        }
+
+        private void moveOpenBoth_Click(object sender, EventArgs e)
+        {
+            moveOpen((byte)'b');
+        }
+
+        private void moveCloseBoth_Click(object sender, EventArgs e)
+        {
+            moveClose((byte)'b');
+        }
+        #endregion
+
+        private int timerCount = 0;
+        private byte[] timerSend;
+        private string timerText;
+        private System.Drawing.Color timerColor;
+
+        private void timerSerial_Tick()
+        {
+            if (!serial.Connected)
+            {
+                Invoke((MethodInvoker)(() =>
+                    status.Text = "Not connected"
+                ));
+                Invoke((MethodInvoker)(() =>
+                    status.BackColor = System.Drawing.Color.LightPink
+                ));
+
+                return;
+            }
+
+            if (timerSend != null)
+            {
+                if (serialSend(timerSend))
+                {
+                    Invoke((MethodInvoker)(() =>
+                        status.Text = timerText
+                    ));
+                    Invoke((MethodInvoker)(() =>
+                        status.BackColor = timerColor
+                    ));
+                }
+                // todo else ошибка?
+
+                timerSend = null;
+            }
+
+            if (++timerCount == 10)
+            {
+                timerCount = 0;
+
+                SerialCommand_Get();
+            }
+        }
     }
 }

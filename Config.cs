@@ -64,26 +64,6 @@ namespace SkyHat
         {
             Save.Enabled = true;
         }
-
-        private void reverseLeftNormal_CheckedChanged(object sender, EventArgs e)
-        {
-            Save.Enabled = true;
-        }
-
-        private void reverseLeftReversed_CheckedChanged(object sender, EventArgs e)
-        {
-            Save.Enabled = true;
-        }
-
-        private void reverseRightNormal_CheckedChanged(object sender, EventArgs e)
-        {
-            Save.Enabled = true;
-        }
-
-        private void reverseRightReversed_CheckedChanged(object sender, EventArgs e)
-        {
-            Save.Enabled = true;
-        }
-        
+       
     }
 }
