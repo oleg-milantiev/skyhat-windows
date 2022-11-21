@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Net;
 using System.Windows.Forms;
 using System.Threading;
 
@@ -22,6 +23,10 @@ namespace SkyHat
         private RegistryKey registry;
 
         private System.Threading.Timer timerSerial;
+        private System.Threading.Timer timerTelegram;
+
+        private bool telegramEnabled;
+        private string telegramUrl, telegramHash;
 
         #region Form Build
         public Form1()
@@ -50,12 +55,12 @@ namespace SkyHat
                 comPort.SelectedItem = registry.GetValue("comPort", "").ToString();
             }
 
-            partLeft.Text = firstLeft.Text = reverseLeft.Text = labelLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
-            partRight.Text = firstRight.Text = reverseRight.Text = labelRight.Text = registry.GetValue("nameRight", "Right").ToString();
+            readConfig();
 
             lightPresetRefresh();
 
-            timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100);
+            timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100); // 10 раз в сек
+            timerTelegram = new System.Threading.Timer(_ => timerTelegram_Tick(), null, 0, 10000); // раз в 10 сек
         }
         #endregion
 
@@ -659,8 +664,17 @@ namespace SkyHat
             Config config = new Config();
             config.ShowDialog();
 
+            readConfig();
+        }
+
+        private void readConfig()
+        {
             partLeft.Text = firstLeft.Text = reverseLeft.Text = labelLeft.Text = registry.GetValue("nameLeft", "Left").ToString();
             partRight.Text = firstRight.Text = reverseRight.Text = labelRight.Text = registry.GetValue("nameRight", "Right").ToString();
+
+            telegramEnabled = registry.GetValue("telegramEnabled", "0").ToString() == "1";
+            telegramUrl = registry.GetValue("telegramUrl", "").ToString();
+            telegramHash = registry.GetValue("telegramHash", "").ToString();
         }
 
         #region Light
@@ -794,7 +808,7 @@ namespace SkyHat
         }
         #endregion
 
-        private int timerCount = 0;
+        private int timerCountGet = 0;
         private byte[] timerSend;
         private string timerText;
         private System.Drawing.Color timerColor;
@@ -803,12 +817,19 @@ namespace SkyHat
         {
             if (!serial.Connected)
             {
-                Invoke((MethodInvoker)(() =>
-                    status.Text = "Not connected"
-                ));
-                Invoke((MethodInvoker)(() =>
-                    status.BackColor = System.Drawing.Color.LightPink
-                ));
+                try
+                {
+                    Invoke((MethodInvoker)(() =>
+                        status.Text = "Not connected"
+                    ));
+                    Invoke((MethodInvoker)(() =>
+                        status.BackColor = System.Drawing.Color.LightPink
+                    ));
+                }
+                catch (Exception)
+                {
+                    // ignore
+                }
 
                 return;
             }
@@ -829,12 +850,27 @@ namespace SkyHat
                 timerSend = null;
             }
 
-            if (++timerCount == 10)
+            // раз в сек
+            if (++timerCountGet == 10)
             {
-                timerCount = 0;
+                timerCountGet = 0;
 
                 SerialCommand_Get();
             }
+
+        }
+
+        private void timerTelegram_Tick()
+        {
+            if (!telegramEnabled || (telegramUrl == "") || (telegramHash == "") || !serial.Connected)
+            {
+                return;
+            }
+
+            var webClient = new WebClient();
+            var response = webClient.DownloadString(telegramUrl +"/"+ telegramHash);
+
+            // todo как будет готово наверху, допишу обработку задач из телеги
         }
     }
 }
