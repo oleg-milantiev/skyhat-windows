@@ -64,6 +64,7 @@ namespace SkyHat
 
             telegramUrl.Enabled = telegramEnabled.Checked;
             telegramHash.Enabled = telegramEnabled.Checked;
+            telegramPool.Enabled = telegramEnabled.Checked;
 
             Save.Enabled = false;
         }
@@ -90,6 +91,7 @@ namespace SkyHat
         {
             telegramUrl.Enabled = telegramEnabled.Checked;
             telegramHash.Enabled = telegramEnabled.Checked;
+            telegramPool.Enabled = telegramEnabled.Checked;
 
             Save.Enabled = true;
         }

@@ -5,22 +5,21 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.IO.Ports;
 using System.Net;
 using System.Windows.Forms;
 using System.Threading;
-using Newtonsoft.Json;
+
+// TODO https://github.com/Marfusios/websocket-client
 
 using Microsoft.Win32;
-
-using ASCOM;
-using ASCOM.Utilities;
 
 namespace SkyHat
 {
     public partial class Form1 : Form
     {
 
-        private Serial serial = new Serial();
+        private SerialPort serial = new SerialPort();
         private RegistryKey registry;
 
         private System.Threading.Timer timerSerial;
@@ -38,7 +37,7 @@ namespace SkyHat
         private void Form1_Load(object sender, EventArgs e)
         {
             comPort.Items.Clear();
-            comPort.Items.AddRange(System.IO.Ports.SerialPort.GetPortNames());      // use System.IO because it's static
+            comPort.Items.AddRange(System.IO.Ports.SerialPort.GetPortNames());
 
             registry = Registry.CurrentUser.CreateSubKey("SOFTWARE\\mo\\SkyHat");
 
@@ -60,8 +59,8 @@ namespace SkyHat
 
             lightPresetRefresh();
 
-            timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100); // 10 раз в сек
-            timerTelegram = new System.Threading.Timer(_ => timerTelegram_Tick(), null, 0, 10000); // раз в 10 сек
+            timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100); // 10 раза в сек
+            //timerTelegram = new System.Threading.Timer(_ => timerTelegram_Tick(), null, 0, 10000); // раз в 10 сек
         }
         #endregion
 
@@ -84,194 +83,279 @@ namespace SkyHat
             {
                 return;
             }
+        }
 
-            byte[] serialBuf = new byte[10];
+        private void serial_DataReceived_EEPROM_Invoke(byte [] serialBuf)
+        {
+            partLeft.Checked = (char)serialBuf[1] == 'l';
+            partRight.Checked = (char)serialBuf[1] == 'r';
+            partBoth.Checked = (char)serialBuf[1] == 'b';
 
-            try
+            firstLeft.Checked = (char)serialBuf[2] == 'l';
+            firstRight.Checked = (char)serialBuf[2] == 'r';
+
+            timeoutLeft.Value = serialBuf[3] > 254 ? 254 : serialBuf[3];
+            timeoutRight.Value = serialBuf[4] > 254 ? 254 : serialBuf[4];
+
+            thresholdLeft.Value = serialBuf[5] > 254 ? 254 : serialBuf[5];
+            thresholdRight.Value = serialBuf[6] > 254 ? 254 : serialBuf[6];
+
+            maxSpeedLeft.Value = serialBuf[7] > 254 ? 254 :
+                (serialBuf[7] < 10 ? 10 : serialBuf[7]);
+            maxSpeedRight.Value = serialBuf[8] > 254 ? 254 :
+                (serialBuf[8] < 10 ? 10 : serialBuf[8]);
+
+            velocityLeft.Value = serialBuf[9] > 254 ? 254 :
+                (serialBuf[9] < 1 ? 1 : serialBuf[9]);
+            velocityRight.Value = serialBuf[10] > 254 ? 254 :
+                (serialBuf[10] < 1 ? 1 : serialBuf[10]);
+
+            reverseLeft.Checked = serialBuf[11] == 1;
+            reverseRight.Checked = serialBuf[12] == 1;
+
+            lightPreset1.Enabled = true;
+            lightPreset2.Enabled = true;
+            lightPreset3.Enabled = true;
+            lightPreset4.Enabled = true;
+            lightPreset5.Enabled = true;
+            saveLightPreset1.Enabled = true;
+            saveLightPreset2.Enabled = true;
+            saveLightPreset3.Enabled = true;
+            saveLightPreset4.Enabled = true;
+            saveLightPreset5.Enabled = true;
+
+            partLeft.Enabled = true;
+            partRight.Enabled = true;
+            partBoth.Enabled = true;
+
+            firstLeft.Enabled = true;
+            firstRight.Enabled = true;
+
+            timeoutLeft.Enabled = true;
+            timeoutRight.Enabled = true;
+            thresholdLeft.Enabled = true;
+            thresholdRight.Enabled = true;
+            maxSpeedLeft.Enabled = true;
+            maxSpeedRight.Enabled = true;
+            velocityLeft.Enabled = true;
+            velocityRight.Enabled = true;
+            reverseLeft.Enabled = true;
+            reverseRight.Enabled = true;
+
+            moveOpenDefault.Enabled = true;
+            moveCloseDefault.Enabled = true;
+            moveOpenLeft.Enabled = true;
+            moveCloseLeft.Enabled = true;
+            moveOpenRight.Enabled = true;
+            moveCloseRight.Enabled = true;
+            moveOpenBoth.Enabled = true;
+            moveCloseBoth.Enabled = true;
+            moveAbort.Enabled = true;
+            moveAbortDefault.Enabled = true;
+
+            status.Text = "Connected";
+            status.BackColor = System.Drawing.Color.LightGreen;
+
+            settingsSave.Enabled = false;
+        }
+
+        private void serial_DataReceived_Get_Invoke(byte [] serialBuf)
+        {
+            light.BackColor = System.Drawing.Color.FromArgb(serialBuf[7], serialBuf[7], serialBuf[7]);
+            statusLight.Text = serialBuf[7].ToString();
+
+            /* debug
+                status.Text = serialBuf[1].ToString() + "," +
+                    serialBuf[2].ToString() + "," +
+                    serialBuf[3].ToString() + "," +
+                    serialBuf[4].ToString() + "," +
+                    serialBuf[5].ToString() + "," +
+                    serialBuf[6].ToString() + "," +
+                    serialBuf[7].ToString() + "," +
+                    serialBuf[8].ToString() + "," +
+                    serialBuf[9].ToString();
+            */
+
+            switch ((char)serialBuf[3])
             {
-                serialBuf = serial.ReceiveCountedBinary(10);
+                case 'c':
+                    statusHatLeft.Text = "Closing";
+                    break;
 
-                Invoke((MethodInvoker)(() =>
-                    light.BackColor = System.Drawing.Color.FromArgb(serialBuf[7], serialBuf[7], serialBuf[7])
-                ));
+                case 'g':
+                    statusHatLeft.Text = "Waiting";
+                    break;
 
-                Invoke((MethodInvoker)(() =>
-                    statusLight.Text = serialBuf[7].ToString()
-                ));
+                case 'o':
+                    statusHatLeft.Text = "Opening";
+                    break;
 
-                //0 byte start = 0xEE
-                //1 byte, current: Текущий ток в ADU датчика
-                //2 byte, timeout: Текущий таймаут в секундах (через сколько секунд мотор вырубится с ошибкой)
-                //3 byte, moveLeftTo: Куда движется левая створка ('c', 'o' или 's')
-                //4 byte, moveRightTo: Куда движется правая створка ('c', 'o' или 's')
-                //5 byte, statusLeft: Статус левой крышки, см. ниже
-                //6 byte, statusRight: Статус правой крышки, см. ниже
-                //7 byte, light: Текущая яркость лампочки (0..255)
-                //8 byte, speedLeft: скорость левой крышки
-                //9 byte, speedRight: скорость левой крышки
-                //- byte stop = 0x00
+                default:
+                    switch ((char)serialBuf[5])
+                    {
+                        case 'c':
+                            statusHatLeft.Text = "Close";
 
-                /* debug
-                Invoke((MethodInvoker)(() =>
-                    status.Text = serialBuf[1].ToString() + "," +
-                        serialBuf[2].ToString() + "," +
-                        serialBuf[3].ToString() + "," +
-                        serialBuf[4].ToString() + "," +
-                        serialBuf[5].ToString() + "," +
-                        serialBuf[6].ToString() + "," +
-                        serialBuf[7].ToString() + "," +
-                        serialBuf[8].ToString() + "," +
-                        serialBuf[9].ToString()
-                ));
-                */
+                            if (status.BackColor == System.Drawing.Color.LightYellow)
+                            {
+                                status.Text = "";
+                                status.BackColor = System.Drawing.Color.LightGreen;
+                            }
 
-                switch ((char)serialBuf[3])
-                {
-                    case 'c':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatLeft.Text = "Closing"
-                        ));
-                        break;
+                            break;
 
-                    case 'g':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatLeft.Text = "Waiting"
-                        ));
-                        break;
+                        case 'o':
+                            statusHatLeft.Text = "Open";
 
-                    case 'o':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatLeft.Text = "Opening"
-                        ));
-                        break;
+                            if (status.BackColor == System.Drawing.Color.LightYellow)
+                            {
+                                status.Text = "";
+                                status.BackColor = System.Drawing.Color.LightGreen;
+                            }
+                            break;
 
-                    default:
-                        switch ((char)serialBuf[5])
-                        {
-                            case 'c':
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatLeft.Text = "Close"
-                                ));
-
-                                if (status.BackColor == System.Drawing.Color.LightYellow)
-                                {
-                                    Invoke((MethodInvoker)(() =>
-                                        status.Text = ""
-                                    ));
-                                    Invoke((MethodInvoker)(() =>
-                                        status.BackColor = System.Drawing.Color.LightGreen
-                                    ));
-                                }
-
-                                break;
-
-                            case 'o':
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatLeft.Text = "Open"
-                                ));
-
-                                if (status.BackColor == System.Drawing.Color.LightYellow)
-                                {
-                                    Invoke((MethodInvoker)(() =>
-                                        status.Text = ""
-                                    ));
-                                    Invoke((MethodInvoker)(() =>
-                                        status.BackColor = System.Drawing.Color.LightGreen
-                                    ));
-                                }
-                                break;
-
-                            default:
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatLeft.Text = "Unknown"
-                                ));
-                                break;
-                        }
-                        break;
-                }
-
-                switch ((char)serialBuf[4])
-                {
-                    case 'c':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatRight.Text = "Closing"
-                        ));
-                        break;
-
-                    case 'g':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatRight.Text = "Waiting"
-                        ));
-                        break;
-
-                    case 'o':
-                        Invoke((MethodInvoker)(() =>
-                            statusHatRight.Text = "Opening"
-                        ));
-                        break;
-
-                    default:
-                        switch ((char)serialBuf[6])
-                        {
-                            case 'c':
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatRight.Text = "Close"
-                                ));
-                                if (status.BackColor == System.Drawing.Color.LightYellow)
-                                {
-                                    Invoke((MethodInvoker)(() =>
-                                        status.Text = ""
-                                    ));
-                                    Invoke((MethodInvoker)(() =>
-                                        status.BackColor = System.Drawing.Color.LightGreen
-                                    ));
-                                }
-
-                                break;
-
-                            case 'o':
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatRight.Text = "Open"
-                                ));
-                                if (status.BackColor == System.Drawing.Color.LightYellow)
-                                {
-                                    Invoke((MethodInvoker)(() =>
-                                        status.Text = ""
-                                    ));
-                                    Invoke((MethodInvoker)(() =>
-                                        status.BackColor = System.Drawing.Color.LightGreen
-                                    ));
-                                }
-                                break;
-
-                            default:
-                                Invoke((MethodInvoker)(() =>
-                                    statusHatRight.Text = "Unknown"
-                                ));
-                                break;
-                        }
-                        break;
-                }
+                        default:
+                            statusHatLeft.Text = "Unknown";
+                            break;
+                    }
+                    break;
             }
-            catch (Exception Ex)
+
+            switch ((char)serialBuf[4])
             {
-                SerialDisconnect();
+                case 'c':
+                    statusHatRight.Text = "Closing";
+                    break;
+
+                case 'g':
+                    statusHatRight.Text = "Waiting";
+                    break;
+
+                case 'o':
+                    statusHatRight.Text = "Opening";
+                    break;
+
+                default:
+                    switch ((char)serialBuf[6])
+                    {
+                        case 'c':
+                            statusHatRight.Text = "Close";
+
+                            if (status.BackColor == System.Drawing.Color.LightYellow)
+                            {
+                                status.Text = "";
+                                status.BackColor = System.Drawing.Color.LightGreen;
+                            }
+
+                            break;
+
+                        case 'o':
+                            statusHatRight.Text = "Open";
+
+                            if (status.BackColor == System.Drawing.Color.LightYellow)
+                            {
+                                status.Text = "";
+                                status.BackColor = System.Drawing.Color.LightGreen;
+                            }
+                            break;
+
+                        default:
+                            statusHatRight.Text = "Unknown";
+                            break;
+                    }
+                    break;
+            }
+        }
+
+        private void serial_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            if ((serialSendLast != null) && (serialSendLast.Length > 1))
+            {
+                switch (serialSendLast[1])
+                {
+                    case (byte)'g':
+                        byte[] serialBuferGet = new byte[11];
+
+                        try
+                        {
+                            serial.Read(serialBuferGet, 0, serialBuferGet.Length);
+
+                            //0 byte start = 0xEE
+                            //1 byte, current: Текущий ток в ADU датчика
+                            //2 byte, timeout: Текущий таймаут в секундах (через сколько секунд мотор вырубится с ошибкой)
+                            //3 byte, moveLeftTo: Куда движется левая створка ('c', 'o' или 's')
+                            //4 byte, moveRightTo: Куда движется правая створка ('c', 'o' или 's')
+                            //5 byte, statusLeft: Статус левой крышки, см. ниже
+                            //6 byte, statusRight: Статус правой крышки, см. ниже
+                            //7 byte, light: Текущая яркость лампочки (0..255)
+                            //8 byte, speedLeft: скорость левой крышки
+                            //9 byte, speedRight: скорость левой крышки
+                            //10 byte stop = 0x00
+
+                            if ((serialBuferGet[0] == (byte)0xee) && (serialBuferGet[10] == (byte) 0))
+                            {
+                                Invoke((MethodInvoker)(() =>
+                                    serial_DataReceived_Get_Invoke(serialBuferGet)
+                                ));
+                            }
+                        }
+                        catch
+                        {
+                            SerialDisconnect();
+                        }
+                        break;
+
+                    case (byte)'e':
+                                        
+                        byte[] serialBuf = new byte[14];
+
+                        serial.Read(serialBuf, 0, serialBuf.Length);
+
+                        if ((serialBuf[0] == (byte)0xee) && (serialBuf[13] == (byte)0))
+                        {
+                            Invoke((MethodInvoker)(() =>
+                                serial_DataReceived_EEPROM_Invoke(serialBuf)
+                            ));
+                        }
+
+                        //- byte start = 0xEE
+                        //1 byte, part: какой мотор используется. Параметр: 'l' (левый), 'r' (правый), 'b' (оба по очереди).
+                        //2 byte, first: какая крышка едет первой при открытии (при закрытии наоборот). Параметр: 'l' (левая, по-умолчанию) или 'r' (правая).
+                        //3 byte, timeoutLeft: задание таймаута движения левой крышки в секундах. Параметр: число секунд (3, например)
+                        //4 byte, timeoutRight: задание таймаута движения правой крышки в секундах. Параметр: число секунд (3, например)
+                        //5 byte, thresholdLeft: задание порога срабатывания датчика тока при движении левого мотора. Параметр: число порога (25, например)
+                        //6 byte, thresholdRight: задание порога срабатывания датчика тока при движении правого мотора. Параметр: число порога (25, например)
+                        //7 byte, maxSpeedLeft: задание максимальной скорости левого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
+                        //8 byte, maxSpeedRight: задание максимальной скорости правого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
+                        //9 byte, velocityLeft: ускорение (скорость разгона) левого мотора. Параметр: число ускорения (5, например)
+                        //10 byte, velocityRight: ускорение (скорость разгона) правого мотора. Параметр: число ускорения (5, например)
+                        //11 byte, reverseLeft: реверс левого мотора (1 / 0)
+                        //12 byte, reverseRight: реверс правого мотора (1 / 0)
+                        //- byte stop = 0x00
+
+                        break;
+                }
             }
         }
 
         private bool SerialConnect()
         {
-            if (serial.Connected)
+            if (serial.IsOpen)
             {
                 SerialDisconnect();
             }
 
-            serial = new Serial();
+            serial = new SerialPort();
 
             try
             {
                 serial.PortName = registry.GetValue("comPort", "").ToString();
-                serial.Speed = SerialSpeed.ps115200;
+                serial.BaudRate = 115200;
+                serial.Parity = Parity.None;
+                serial.DataBits = 8;
+                serial.StopBits = StopBits.One;
+                serial.ReadBufferSize = 100;
+                serial.DataReceived += serial_DataReceived;
 
                 if (string.IsNullOrEmpty(serial.PortName))
                 {
@@ -280,13 +364,12 @@ namespace SkyHat
                     return false;
                 }
 
-                serial.DTREnable = true;
-                serial.RTSEnable = true;
+                serial.DtrEnable = true;
+                serial.RtsEnable = true;
 
-                serial.ReceiveTimeout = 5;
-                serial.ReceiveTimeoutMs = 5000;
+                serial.ReadTimeout = 5000;
 
-                serial.Connected = true;
+                serial.Open();
 
                 Thread.Sleep(2000);
 
@@ -294,104 +377,11 @@ namespace SkyHat
 
                 if (!serialSend(new byte[] { (byte)'c', (byte)'e' }))
                     return false;
-                
-                byte[] serialBuf = new byte[13];
-
-                serialBuf = serial.ReceiveCountedBinary(14);
-
-                //- byte start = 0xEE
-                //1 byte, part: какой мотор используется. Параметр: 'l' (левый), 'r' (правый), 'b' (оба по очереди).
-                //2 byte, first: какая крышка едет первой при открытии (при закрытии наоборот). Параметр: 'l' (левая, по-умолчанию) или 'r' (правая).
-                //3 byte, timeoutLeft: задание таймаута движения левой крышки в секундах. Параметр: число секунд (3, например)
-                //4 byte, timeoutRight: задание таймаута движения правой крышки в секундах. Параметр: число секунд (3, например)
-                //5 byte, thresholdLeft: задание порога срабатывания датчика тока при движении левого мотора. Параметр: число порога (25, например)
-                //6 byte, thresholdRight: задание порога срабатывания датчика тока при движении правого мотора. Параметр: число порога (25, например)
-                //7 byte, maxSpeedLeft: задание максимальной скорости левого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
-                //8 byte, maxSpeedRight: задание максимальной скорости правого мотора в ШИМ 0..255. Параметр: число скорости (255, например)
-                //9 byte, velocityLeft: ускорение (скорость разгона) левого мотора. Параметр: число ускорения (5, например)
-                //10 byte, velocityRight: ускорение (скорость разгона) правого мотора. Параметр: число ускорения (5, например)
-                //11 byte, reverseLeft: реверс левого мотора (1 / 0)
-                //12 byte, reverseRight: реверс правого мотора (1 / 0)
-                //- byte stop = 0x00
-
-                partLeft.Checked  = (char)serialBuf[1] == 'l';
-                partRight.Checked = (char)serialBuf[1] == 'r';
-                partBoth.Checked  = (char)serialBuf[1] == 'b';
-
-                firstLeft.Checked  = (char)serialBuf[2] == 'l';
-                firstRight.Checked = (char)serialBuf[2] == 'r';
-
-                timeoutLeft.Value = serialBuf[3] > 254 ? 254 : serialBuf[3];
-                timeoutRight.Value = serialBuf[4] > 254 ? 254 : serialBuf[4];
-
-                thresholdLeft.Value = serialBuf[5] > 254 ? 254 : serialBuf[5];
-                thresholdRight.Value = serialBuf[6] > 254 ? 254 : serialBuf[6];
-
-                maxSpeedLeft.Value   = serialBuf[7] > 254 ? 254 :
-                    (serialBuf[7] < 10 ? 10 : serialBuf[7]);
-                maxSpeedRight.Value  = serialBuf[8] > 254 ? 254 :
-                    (serialBuf[8] < 10 ? 10 : serialBuf[8]);
-
-                velocityLeft.Value = serialBuf[9] > 254 ? 254 :
-                    (serialBuf[9] < 1 ? 1 : serialBuf[9]);
-                velocityRight.Value = serialBuf[10] > 254 ? 254 :
-                    (serialBuf[10] < 1 ? 1 : serialBuf[10]);
-
-                reverseLeft.Checked = serialBuf[11] == 1;
-                reverseRight.Checked = serialBuf[12] == 1;
-
-                lightPreset1.Enabled = true;
-                lightPreset2.Enabled = true;
-                lightPreset3.Enabled = true;
-                lightPreset4.Enabled = true;
-                lightPreset5.Enabled = true;
-                saveLightPreset1.Enabled = true;
-                saveLightPreset2.Enabled = true;
-                saveLightPreset3.Enabled = true;
-                saveLightPreset4.Enabled = true;
-                saveLightPreset5.Enabled = true;
-
-                partLeft.Enabled  = true;
-                partRight.Enabled = true;
-                partBoth.Enabled = true;
-                
-                firstLeft.Enabled  = true;
-                firstRight.Enabled = true;
-
-                timeoutLeft.Enabled    = true;
-                timeoutRight.Enabled    = true;
-                thresholdLeft.Enabled  = true;
-                thresholdRight.Enabled  = true;
-                maxSpeedLeft.Enabled   = true;
-                maxSpeedRight.Enabled   = true;
-                velocityLeft.Enabled   = true;
-                velocityRight.Enabled   = true;
-                reverseLeft.Enabled   = true;
-                reverseRight.Enabled   = true;
-
-                moveOpenDefault.Enabled = true;
-                moveCloseDefault.Enabled = true;
-                moveOpenLeft.Enabled = true;
-                moveCloseLeft.Enabled = true;
-                moveOpenRight.Enabled = true;
-                moveCloseRight.Enabled = true;
-                moveOpenBoth.Enabled = true;
-                moveCloseBoth.Enabled = true;
-                moveAbort.Enabled = true;
-                moveAbortDefault.Enabled = true;
-
-                status.Text = "Connected";
-                status.BackColor = System.Drawing.Color.LightGreen;
-                
-                settingsSave.Enabled = false;
 
                 return true;
             }
             catch (UnauthorizedAccessException Ex)
             {
-                serial.DTREnable = false;
-                serial.RTSEnable = false;
-
                 MessageBox.Show("Permission error opening COM port", "Connection error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 return false;
@@ -400,13 +390,10 @@ namespace SkyHat
             {
                 MessageBox.Show("Unknown error opening COM port: " + Ex.Message, "Connection error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
-                if (serial.Connected)
+                if (serial.IsOpen)
                 {
                     SerialDisconnect();
                 }
-
-                serial.DTREnable = false;
-                serial.RTSEnable = false;
 
                 return false;
             }
@@ -416,36 +403,24 @@ namespace SkyHat
             return false;
         }
 
+        private byte[] serialSendLast;
+
         private bool serialSend(byte[] package)
         {
-            if (!serial.Connected)
+            if (!serial.IsOpen)
                 return false;
 
             try
             {
-                serial.ClearBuffers();
-            }
-            catch (Exception Ex)
-            {
-                if (serial.Connected)
-                {
-                    SerialDisconnect();
-                }
+                serial.Write(package, 0, package.Length);
 
-                MessageBox.Show("Error sending command via COM port", "Sending command error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
-                return false;
-            }
-
-            try
-            {
-                serial.TransmitBinary(package);
+                serialSendLast = package;
 
                 return true;
             }
             catch (Exception Ex)
             {
-                if (serial.Connected)
+                if (serial.IsOpen)
                 {
                     SerialDisconnect();
                 }
@@ -458,22 +433,26 @@ namespace SkyHat
         
         private void SerialDisconnect()
         {
-            if (serial.Connected)
+            if (serial.IsOpen)
             {
                 try
                 {
-                    serial.Connected = false;
+                    serial.Close();
+                    serial.Dispose();
                 }
-                catch (Exception Ex2)
+                catch
                 {
-
                 }
             }
 
-            serial.DTREnable = false;
-            serial.RTSEnable = false;
-            serial.Dispose();
-            
+            Invoke((MethodInvoker)(() =>
+                SerialDisconnectInvoke()
+            ));
+        }
+        #endregion
+
+        private void SerialDisconnectInvoke()
+        {
             status.BackColor = System.Drawing.Color.LightPink;
             status.Text = "Disconnected";
 
@@ -520,7 +499,7 @@ namespace SkyHat
             moveAbort.Enabled = false;
             moveAbortDefault.Enabled = false;
         }
-        #endregion
+
 
         private void settingsSave_Click(object sender, EventArgs e)
         {
@@ -816,7 +795,7 @@ namespace SkyHat
 
         private void timerSerial_Tick()
         {
-            if (!serial.Connected)
+            if (!serial.IsOpen)
             {
                 try
                 {
@@ -867,7 +846,7 @@ namespace SkyHat
 
             // todo websocket
 
-            if (!telegramEnabled || (telegramUrl == "") || (telegramHash == "") || !serial.Connected)
+            if (!telegramEnabled || (telegramUrl == "") || (telegramHash == "") || !serial.IsOpen)
             {
 //                return;
             }
@@ -876,11 +855,11 @@ namespace SkyHat
 
             var webClient = new WebClient();
 
-            Telegram response = JsonConvert.DeserializeObject<Telegram>(
-                webClient.DownloadString(telegramUrl + "/" + telegramHash)
-                );
+//            Telegram response = JsonConvert.DeserializeObject<Telegram>(
+//                webClient.DownloadString(telegramUrl + "/" + telegramHash)
+//                );
 
-            response.command = "a";
+//            response.command = "a";
 
             // todo как будет готово наверху, допишу обработку задач из телеги
         }

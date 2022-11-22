@@ -23,6 +23,3 @@ C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\ASCOM.Utilities.dll
 C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\ASCOM.Exceptions.dll
 C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\ASCOM.Utilities.xml
 C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\ASCOM.Exceptions.xml
-C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\Newtonsoft.Json.dll
-C:\files\Продукты\SkyHat\Windows\SkyHat\bin\Debug\Newtonsoft.Json.xml
-C:\files\Продукты\SkyHat\Windows\SkyHat\obj\x86\Debug\SkyHat.csproj.CopyComplete
