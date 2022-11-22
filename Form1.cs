@@ -8,6 +8,7 @@ using System.Text;
 using System.Net;
 using System.Windows.Forms;
 using System.Threading;
+using Newtonsoft.Json;
 
 using Microsoft.Win32;
 
@@ -850,7 +851,7 @@ namespace SkyHat
                 timerSend = null;
             }
 
-            // раз в сек
+            // get раз в 1 сек в том же потоке, что и send (всё общение с портом в одном потоке последовательно)
             if (++timerCountGet == 10)
             {
                 timerCountGet = 0;
@@ -862,15 +863,28 @@ namespace SkyHat
 
         private void timerTelegram_Tick()
         {
+            return;
+
+            // todo websocket
+
             if (!telegramEnabled || (telegramUrl == "") || (telegramHash == "") || !serial.Connected)
             {
-                return;
+//                return;
             }
 
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+
             var webClient = new WebClient();
-            var response = webClient.DownloadString(telegramUrl +"/"+ telegramHash);
+
+            Telegram response = JsonConvert.DeserializeObject<Telegram>(
+                webClient.DownloadString(telegramUrl + "/" + telegramHash)
+                );
+
+            response.command = "a";
 
             // todo как будет готово наверху, допишу обработку задач из телеги
         }
     }
+
+    
 }
