@@ -1,10 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
+using System.IO;
 using System.IO.Ports;
 using System.Net;
 using System.Windows.Forms;
@@ -19,11 +14,17 @@ namespace SkyHat
     public partial class Form1 : Form
     {
 
+        private const int DEBUG_INFO = 1;
+        private const int DEBUG_VERBOSE = 2;
+        private const int DEBUG_DEBUG = 3;
+
+        private const int DEBUG = DEBUG_DEBUG;
+
         private SerialPort serial = new SerialPort();
         private RegistryKey registry;
 
         private System.Threading.Timer timerSerial;
-        private System.Threading.Timer timerTelegram;
+//        private System.Threading.Timer timerTelegram;
 
         private bool telegramEnabled;
         private string telegramUrl, telegramHash;
@@ -34,38 +35,70 @@ namespace SkyHat
             InitializeComponent();
         }
 
+        private void log(int level, string function, string message = null)
+        {
+            if (DEBUG < level)
+            {
+                return;
+            }
+
+            string path = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "mo\\SkyHat"
+                );
+
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
+
+            path += "\\log.txt";
+
+            if (!File.Exists(path))
+            {
+                using (FileStream fs = File.Create(path)) { }
+            }
+
+            using (StreamWriter sw = File.AppendText(path))
+            {
+                sw.WriteLine(DateTime.Now.ToString() +"["+ level +"]: "+ function +(message != null ? ("\t"+ message) : ""));
+            }
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
+            log(DEBUG_INFO, "Form_Load", "start");
+
             comPort.Items.Clear();
             comPort.Items.AddRange(System.IO.Ports.SerialPort.GetPortNames());
 
+            log(DEBUG_DEBUG, "Form_Load", "Read ports: "+ comPort.Items.Count);
+
             registry = Registry.CurrentUser.CreateSubKey("SOFTWARE\\mo\\SkyHat");
-
-            string move = registry.GetValue("move", "").ToString();
-
-            if (move != "")
-            {
-                partLeft.Checked = (move == "l");
-                partRight.Checked = (move == "r");
-                partBoth.Checked = (move == "a");
-            }
-
-            if (registry.GetValue("comPort", "").ToString() != "")
-            {
-                comPort.SelectedItem = registry.GetValue("comPort", "").ToString();
-            }
 
             readConfig();
 
             lightPresetRefresh();
 
+            if (registry.GetValue("comPort", "").ToString() != "")
+            {
+                string portName = registry.GetValue("comPort", "").ToString();
+
+                log(DEBUG_VERBOSE, "Form_Load", "Setting active port: "+ portName);
+                comPort.SelectedItem = portName;
+            }
+
             timerSerial = new System.Threading.Timer(_ => timerSerial_Tick(), null, 0, 100); // 10 раза в сек
             //timerTelegram = new System.Threading.Timer(_ => timerTelegram_Tick(), null, 0, 10000); // раз в 10 сек
+
+            log(DEBUG_INFO, "Form_Load", "finish");
         }
         #endregion
 
         private void comPort_SelectedIndexChanged(object sender, EventArgs e)
         {
+            log(DEBUG_VERBOSE, "comPort_SelectedIndexChanged");
+            
             registry.SetValue("comPort", comPort.SelectedItem.ToString());
 
             SerialConnect();
@@ -74,19 +107,10 @@ namespace SkyHat
 
         #region Serial
 
-        /// <summary>
-        /// Отсылает команду GET на устройство. Данные помещает в this.*
-        /// </summary>
-        private void SerialCommand_Get()
-        {
-            if (!serialSend(new byte[] { (byte)'c', (byte)'g' }))
-            {
-                return;
-            }
-        }
-
         private void serial_DataReceived_EEPROM_Invoke(byte [] serialBuf)
         {
+            log(DEBUG_DEBUG, "serial_DataReceived_EEPROM_Invoke", "start");
+
             partLeft.Checked = (char)serialBuf[1] == 'l';
             partRight.Checked = (char)serialBuf[1] == 'r';
             partBoth.Checked = (char)serialBuf[1] == 'b';
@@ -157,10 +181,14 @@ namespace SkyHat
             status.BackColor = System.Drawing.Color.LightGreen;
 
             settingsSave.Enabled = false;
+
+            log(DEBUG_DEBUG, "serial_DataReceived_EEPROM_Invoke", "finish");
         }
 
         private void serial_DataReceived_Get_Invoke(byte [] serialBuf)
         {
+            log(DEBUG_DEBUG, "serial_DataReceived_Get_Invoke", "start");
+
             light.BackColor = System.Drawing.Color.FromArgb(serialBuf[7], serialBuf[7], serialBuf[7]);
             statusLight.Text = serialBuf[7].ToString();
 
@@ -265,20 +293,27 @@ namespace SkyHat
                     }
                     break;
             }
+
+            log(DEBUG_DEBUG, "serial_DataReceived_Get_Invoke", "finish");
         }
 
         private void serial_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
+            log(DEBUG_DEBUG, "serial_DataReceived", "start");
+
             if ((serialSendLast != null) && (serialSendLast.Length > 1))
             {
                 switch (serialSendLast[1])
                 {
                     case (byte)'g':
+                        log(DEBUG_DEBUG, "serial_DataReceived", "GET - start");
+
                         byte[] serialBuferGet = new byte[11];
 
                         try
                         {
                             serial.Read(serialBuferGet, 0, serialBuferGet.Length);
+                            log(DEBUG_DEBUG, "serial_DataReceived", "GET - read data");
 
                             //0 byte start = 0xEE
                             //1 byte, current: Текущий ток в ADU датчика
@@ -294,6 +329,8 @@ namespace SkyHat
 
                             if ((serialBuferGet[0] == (byte)0xee) && (serialBuferGet[10] == (byte) 0))
                             {
+                                log(DEBUG_DEBUG, "serial_DataReceived", "GET - read successful");
+
                                 Invoke((MethodInvoker)(() =>
                                     serial_DataReceived_Get_Invoke(serialBuferGet)
                                 ));
@@ -301,18 +338,24 @@ namespace SkyHat
                         }
                         catch
                         {
+                            log(DEBUG_DEBUG, "serial_DataReceived", "GET - read fail");
+
                             SerialDisconnect();
                         }
                         break;
 
                     case (byte)'e':
-                                        
+                        log(DEBUG_DEBUG, "serial_DataReceived", "EEPROM - start");
+
                         byte[] serialBuf = new byte[14];
 
                         serial.Read(serialBuf, 0, serialBuf.Length);
+                        log(DEBUG_DEBUG, "serial_DataReceived", "EEPROM - read data");
 
                         if ((serialBuf[0] == (byte)0xee) && (serialBuf[13] == (byte)0))
                         {
+                            log(DEBUG_DEBUG, "serial_DataReceived", "EEPROM - read successful");
+
                             Invoke((MethodInvoker)(() =>
                                 serial_DataReceived_EEPROM_Invoke(serialBuf)
                             ));
@@ -333,6 +376,8 @@ namespace SkyHat
                         //12 byte, reverseRight: реверс правого мотора (1 / 0)
                         //- byte stop = 0x00
 
+                        // todo а почему нет try / catch? и туда log(fail)
+
                         break;
                 }
             }
@@ -340,6 +385,8 @@ namespace SkyHat
 
         private bool SerialConnect()
         {
+            log(DEBUG_INFO, "SerialConnect", "start");
+
             if (serial.IsOpen)
             {
                 SerialDisconnect();
@@ -407,6 +454,7 @@ namespace SkyHat
 
         private bool serialSend(byte[] package)
         {
+            // todo log
             if (!serial.IsOpen)
                 return false;
 
@@ -433,10 +481,14 @@ namespace SkyHat
         
         private void SerialDisconnect()
         {
+            log(DEBUG_INFO, "SerialDisconnect", "start");
+
             if (serial.IsOpen)
             {
                 try
                 {
+                    log(DEBUG_DEBUG, "SerialDisconnect", "isOpen - close()");
+
                     serial.Close();
                     serial.Dispose();
                 }
@@ -448,11 +500,15 @@ namespace SkyHat
             Invoke((MethodInvoker)(() =>
                 SerialDisconnectInvoke()
             ));
+            
+            log(DEBUG_VERBOSE, "SerialDisconnect", "finish");
         }
         #endregion
 
         private void SerialDisconnectInvoke()
         {
+            log(DEBUG_DEBUG, "SerialDisconnectInvoke", "start");
+
             status.BackColor = System.Drawing.Color.LightPink;
             status.Text = "Disconnected";
 
@@ -498,6 +554,8 @@ namespace SkyHat
             moveCloseBoth.Enabled = false;
             moveAbort.Enabled = false;
             moveAbortDefault.Enabled = false;
+
+            log(DEBUG_DEBUG, "SerialDisconnectInvoke", "finish");
         }
 
 
@@ -508,6 +566,8 @@ namespace SkyHat
 
         private void saveSettings()
         {
+            log(DEBUG_DEBUG, "saveSettings", "start");
+
             timerSend = new byte[] { (byte)'c', (byte)'s',
                 (byte)(partLeft.Checked ? 'l' : (partRight.Checked ? 'r' : 'b')),
                 (byte)(firstLeft.Checked ? 'l' : 'r'),
@@ -527,6 +587,8 @@ namespace SkyHat
             timerColor = System.Drawing.Color.LightGreen;
 
             settingsSave.Enabled = false;
+
+            log(DEBUG_DEBUG, "saveSettings", "finish");
         }
 
         private bool confirmSave()
@@ -555,6 +617,8 @@ namespace SkyHat
 
         private void moveOpen(byte ch)
         {
+            log(DEBUG_VERBOSE, "moveOpen", "start");
+
             if (!confirmSave())
             {
                 return;
@@ -565,10 +629,14 @@ namespace SkyHat
             timerColor = System.Drawing.Color.LightYellow;
             
             brightness.Value = 0;
+
+            log(DEBUG_DEBUG, "moveOpen", "finish");
         }
 
         private void moveClose(byte ch)
         {
+            log(DEBUG_VERBOSE, "moveClose", "start");
+
             if (!confirmSave())
             {
                 return;
@@ -579,10 +647,14 @@ namespace SkyHat
             timerColor = System.Drawing.Color.LightYellow;
 
             brightness.Value = 0;
+
+            log(DEBUG_VERBOSE, "moveClose", "finish");
         }
 
         private void moveAbort_Click(object sender, EventArgs e)
         {
+            log(DEBUG_VERBOSE, "moveAbort", "start");
+
             if (!confirmSave())
             {
                 return;
@@ -592,6 +664,8 @@ namespace SkyHat
             timerSend = new byte[] { (byte)'c', (byte)'a' };
 
             brightness.Value = 0;
+
+            log(DEBUG_VERBOSE, "moveAbort", "finish");
         }
 
         private void settingChanged(object sender, EventArgs e)
@@ -603,6 +677,7 @@ namespace SkyHat
         {
             try
             {
+                // todo другой адрес
                 System.Diagnostics.Process.Start("http://astro.milantiev.com/shop");
             }
             catch (System.ComponentModel.Win32Exception noBrowser)
@@ -620,6 +695,7 @@ namespace SkyHat
         {
             try
             {
+                // todo о, а что там? :)
                 System.Diagnostics.Process.Start("http://astro.milantiev.com/product/skyhat/");
             }
             catch (System.ComponentModel.Win32Exception noBrowser)
@@ -655,6 +731,8 @@ namespace SkyHat
             telegramEnabled = registry.GetValue("telegramEnabled", "0").ToString() == "1";
             telegramUrl = registry.GetValue("telegramUrl", "").ToString();
             telegramHash = registry.GetValue("telegramHash", "").ToString();
+
+            log(DEBUG_DEBUG, "readConfig");
         }
 
         #region Light
@@ -678,15 +756,17 @@ namespace SkyHat
         private void lightPresetRefresh()
         {
             lightPreset1.Text = registry.GetValue("lightPreset1", "[empty]").ToString();
-            lightPreset1.Enabled = lightPreset1.Text != "[empty]";
+            lightPreset1.Enabled = saveLightPreset1.Enabled && lightPreset1.Text != "[empty]";
             lightPreset2.Text = registry.GetValue("lightPreset2", "[empty]").ToString();
-            lightPreset2.Enabled = lightPreset2.Text != "[empty]";
+            lightPreset2.Enabled = saveLightPreset2.Enabled && lightPreset2.Text != "[empty]";
             lightPreset3.Text = registry.GetValue("lightPreset3", "[empty]").ToString();
-            lightPreset3.Enabled = lightPreset3.Text != "[empty]";
+            lightPreset3.Enabled = saveLightPreset3.Enabled && lightPreset3.Text != "[empty]";
             lightPreset4.Text = registry.GetValue("lightPreset4", "[empty]").ToString();
-            lightPreset4.Enabled = lightPreset4.Text != "[empty]";
+            lightPreset4.Enabled = saveLightPreset4.Enabled && lightPreset4.Text != "[empty]";
             lightPreset5.Text = registry.GetValue("lightPreset5", "[empty]").ToString();
-            lightPreset5.Enabled = lightPreset5.Text != "[empty]";
+            lightPreset5.Enabled = saveLightPreset5.Enabled && lightPreset5.Text != "[empty]";
+
+            log(DEBUG_DEBUG, "lightPresetRefresh");
         }
 
         private void lightPreset(int no)
@@ -816,8 +896,12 @@ namespace SkyHat
 
             if (timerSend != null)
             {
+                log(DEBUG_VERBOSE, "timerSerial_Tick", "timerSend is not null");
+
                 if (serialSend(timerSend))
                 {
+                    log(DEBUG_VERBOSE, "timerSerial_Tick", "serialSend succesful");
+
                     Invoke((MethodInvoker)(() =>
                         status.Text = timerText
                     ));
@@ -835,20 +919,26 @@ namespace SkyHat
             {
                 timerCountGet = 0;
 
-                SerialCommand_Get();
+                if (!serialSend(new byte[] { (byte)'c', (byte)'g' }))
+                {
+                    log(DEBUG_VERBOSE, "timerSerial_Tick", "GET fail");
+
+                    // todo а что делать?
+                    return;
+                }
             }
 
         }
 
+        /*
+        // todo как будет готово наверху, допишу обработку задач из телеги
         private void timerTelegram_Tick()
         {
-            return;
-
             // todo websocket
 
             if (!telegramEnabled || (telegramUrl == "") || (telegramHash == "") || !serial.IsOpen)
             {
-//                return;
+                return;
             }
 
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
@@ -861,9 +951,7 @@ namespace SkyHat
 
 //            response.command = "a";
 
-            // todo как будет готово наверху, допишу обработку задач из телеги
         }
+        */
     }
-
-    
 }

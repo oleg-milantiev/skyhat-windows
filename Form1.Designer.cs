@@ -346,6 +346,7 @@
             // reverseRight
             // 
             this.reverseRight.AutoSize = true;
+            this.reverseRight.Enabled = false;
             this.reverseRight.Location = new System.Drawing.Point(284, 199);
             this.reverseRight.Name = "reverseRight";
             this.reverseRight.Size = new System.Drawing.Size(58, 21);
@@ -357,6 +358,7 @@
             // reverseLeft
             // 
             this.reverseLeft.AutoSize = true;
+            this.reverseLeft.Enabled = false;
             this.reverseLeft.Location = new System.Drawing.Point(187, 199);
             this.reverseLeft.Name = "reverseLeft";
             this.reverseLeft.Size = new System.Drawing.Size(49, 21);
@@ -587,6 +589,7 @@
             // 
             // saveLightPreset5
             // 
+            this.saveLightPreset5.Enabled = false;
             this.saveLightPreset5.Location = new System.Drawing.Point(386, 108);
             this.saveLightPreset5.Name = "saveLightPreset5";
             this.saveLightPreset5.Size = new System.Drawing.Size(65, 33);
@@ -597,6 +600,7 @@
             // 
             // saveLightPreset4
             // 
+            this.saveLightPreset4.Enabled = false;
             this.saveLightPreset4.Location = new System.Drawing.Point(315, 108);
             this.saveLightPreset4.Name = "saveLightPreset4";
             this.saveLightPreset4.Size = new System.Drawing.Size(65, 33);
@@ -618,6 +622,7 @@
             // 
             // saveLightPreset3
             // 
+            this.saveLightPreset3.Enabled = false;
             this.saveLightPreset3.Location = new System.Drawing.Point(244, 108);
             this.saveLightPreset3.Name = "saveLightPreset3";
             this.saveLightPreset3.Size = new System.Drawing.Size(65, 33);
@@ -650,6 +655,7 @@
             // 
             // saveLightPreset2
             // 
+            this.saveLightPreset2.Enabled = false;
             this.saveLightPreset2.Location = new System.Drawing.Point(173, 108);
             this.saveLightPreset2.Name = "saveLightPreset2";
             this.saveLightPreset2.Size = new System.Drawing.Size(65, 33);
@@ -671,6 +677,7 @@
             // 
             // saveLightPreset1
             // 
+            this.saveLightPreset1.Enabled = false;
             this.saveLightPreset1.Location = new System.Drawing.Point(102, 108);
             this.saveLightPreset1.Name = "saveLightPreset1";
             this.saveLightPreset1.Size = new System.Drawing.Size(65, 33);
