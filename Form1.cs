@@ -1,11 +1,15 @@
 ﻿using System;
 using System.IO;
 using System.IO.Ports;
-using System.Net;
 using System.Windows.Forms;
 using System.Threading;
 
-// TODO https://github.com/Marfusios/websocket-client
+/* TODO
+ * debug флаг в конфиге / регистри / ...
+ * installer icon
+ * release, не debug
+ * telegram - https://github.com/Marfusios/websocket-client
+ */
 
 using Microsoft.Win32;
 
@@ -28,6 +32,8 @@ namespace SkyHat
 
         private bool telegramEnabled;
         private string telegramUrl, telegramHash;
+
+        private int connectingTimeout;
 
         #region Form Build
         public Form1()
@@ -110,6 +116,8 @@ namespace SkyHat
         private void serial_DataReceived_EEPROM_Invoke(byte [] serialBuf)
         {
             log(DEBUG_DEBUG, "serial_DataReceived_EEPROM_Invoke", "start");
+
+            connectingTimeout = -1; // drop initial connection timeout event
 
             partLeft.Checked = (char)serialBuf[1] == 'l';
             partRight.Checked = (char)serialBuf[1] == 'r';
@@ -389,14 +397,21 @@ namespace SkyHat
 
             if (serial.IsOpen)
             {
+                log(DEBUG_DEBUG, "SerialConnect", "isOpen - disconnect");
+            
                 SerialDisconnect();
             }
 
             serial = new SerialPort();
+            connectingTimeout = 5;
 
             try
             {
-                serial.PortName = registry.GetValue("comPort", "").ToString();
+                string port = registry.GetValue("comPort", "").ToString();
+
+                log(DEBUG_DEBUG, "SerialConnect", "try to connect to "+ port);
+
+                serial.PortName = port;
                 serial.BaudRate = 115200;
                 serial.Parity = Parity.None;
                 serial.DataBits = 8;
@@ -421,20 +436,29 @@ namespace SkyHat
                 Thread.Sleep(2000);
 
                 //SerialCommand_Get();
+                log(DEBUG_DEBUG, "SerialConnect", "try to connect - finish");
 
                 if (!serialSend(new byte[] { (byte)'c', (byte)'e' }))
+                {
+                    log(DEBUG_DEBUG, "SerialConnect", "try to connect - fail send EEPROM get");
+
                     return false;
+                }
 
                 return true;
             }
             catch (UnauthorizedAccessException Ex)
             {
+                log(DEBUG_VERBOSE, "SerialConnect", "fail - unauth");
+
                 MessageBox.Show("Permission error opening COM port", "Connection error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 return false;
             }
             catch (Exception Ex)
             {
+                log(DEBUG_VERBOSE, "SerialConnect", "fail - exception: "+ Ex.Message);
+
                 MessageBox.Show("Unknown error opening COM port: " + Ex.Message, "Connection error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 if (serial.IsOpen)
@@ -454,9 +478,14 @@ namespace SkyHat
 
         private bool serialSend(byte[] package)
         {
-            // todo log
+            log(DEBUG_INFO, "SerialSend", "start");
+
             if (!serial.IsOpen)
+            {
+                log(DEBUG_VERBOSE, "SerialSend", "not is open");
+
                 return false;
+            }
 
             try
             {
@@ -464,12 +493,18 @@ namespace SkyHat
 
                 serialSendLast = package;
 
+                log(DEBUG_DEBUG, "SerialSend", "sent succesful");
+
                 return true;
             }
             catch (Exception Ex)
             {
+                log(DEBUG_VERBOSE, "SerialSend", "fail: "+ Ex.Message);
+
                 if (serial.IsOpen)
                 {
+                    log(DEBUG_DEBUG, "SerialSend", "fail - is open (try to disconnect)");
+
                     SerialDisconnect();
                 }
 
@@ -875,6 +910,8 @@ namespace SkyHat
 
         private void timerSerial_Tick()
         {
+//            log(DEBUG_DEBUG, "timerSerial_Tick", "uh..");
+
             if (!serial.IsOpen)
             {
                 try
@@ -918,6 +955,24 @@ namespace SkyHat
             if (++timerCountGet == 10)
             {
                 timerCountGet = 0;
+
+                if (--connectingTimeout > 0)
+                {
+                    log(DEBUG_DEBUG, "timerSerial_Tick", "connection timeout - waiting: "+ connectingTimeout);
+
+                    return;
+                }
+
+                if (connectingTimeout == 0)
+                {
+                    log(DEBUG_VERBOSE, "timerSerial_Tick", "connection timeout");
+
+                    MessageBox.Show("No SkyHat at port " + serial.PortName + ". Please choose another", "Choose COM port", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                    SerialDisconnect();
+
+                    return;
+                }
 
                 if (!serialSend(new byte[] { (byte)'c', (byte)'g' }))
                 {
